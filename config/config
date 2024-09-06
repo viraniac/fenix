@@ -372,6 +372,7 @@ case $DISTRIB_RELEASE in
 		PACKAGE_LIST_DESKTOP+=" $PACKAGE_LIST_GSTREAMER xserver-xorg-input-all language-selector-gnome viewnior dbus-user-session libreoffice-style-tango"
 		# Package dependencies for chromium
 		PACKAGE_LIST_DESKTOP+=" libdouble-conversion3 libharfbuzz-subset0 libjsoncpp25 libminizip1t64 libxnvctrl0 xdg-utils"
+		PACKAGE_LIST_DESKTOP+=" libllvm18"
 	;;
 esac
 
