@@ -1,0 +1,148 @@
+From c8a6e565c001a6d4e35239376308aa12bd1110dc Mon Sep 17 00:00:00 2001
+From: yan <yan-wyb@foxmail.com>
+Date: Fri, 4 Dec 2020 09:32:08 +0800
+Subject: [PATCH 11/38] parse bootsource var for detect boot source for read
+ env from booted fat partition
+
+Signed-off-by: yan <yan-wyb@foxmail.com>
+---
+ env/fat.c | 63 ++++++++++++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 53 insertions(+), 10 deletions(-)
+
+diff --git a/env/fat.c b/env/fat.c
+index d87a47b100..f5aeeaab8a 100644
+--- a/env/fat.c
++++ b/env/fat.c
+@@ -34,6 +34,10 @@
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ 
++struct blk_desc *dev_desc = NULL;
++struct disk_partition info;
++int dev, part;
++
+ __weak const char *env_fat_get_intf(void)
+ {
+ 	return (const char *)CONFIG_ENV_FAT_INTERFACE;
+@@ -58,13 +62,45 @@ __weak char *env_fat_get_dev_part(void)
+ #endif
+ }
+ 
++#define CONFIG_ENV_FAT_AUTO_SOURCE 1
++#define CONFIG_ENV_FAT_DEVICE_AND_PART_SD  "1:1"
++#define CONFIG_ENV_FAT_DEVICE_AND_PART_MMC "2:1"
++
++#ifdef CONFIG_ENV_FAT_AUTO_SOURCE
++//auto detect env storage source by boot source
++static int detect_source( int part )
++{
++	printf("detect... ");
++	if ( ! env_get("boot_source") ) {
++		printf("\n");
++		return part;
++	}
++
++	if ( strstr(env_get("boot_source"),"sd") ) {
++		printf("booted from sd...\n");
++		return blk_get_device_part_str(CONFIG_ENV_FAT_INTERFACE,
++				CONFIG_ENV_FAT_DEVICE_AND_PART_SD,
++				&dev_desc, &info, 1);
++	}
++	if ( strstr(env_get("boot_source"),"emmc") ) {
++		printf("booted from emmc...\n");
++		return blk_get_device_part_str(CONFIG_ENV_FAT_INTERFACE,
++				CONFIG_ENV_FAT_DEVICE_AND_PART_MMC,
++				&dev_desc, &info, 1);
++	}
++
++	printf("booted from %s - ignored...\n", env_get("boot_source") );
++
++	return -1;
++}
++
++#endif
++
++
+ static int env_fat_save(void)
+ {
+ 	env_t __aligned(ARCH_DMA_MINALIGN) env_new;
+-	struct blk_desc *dev_desc = NULL;
+-	struct disk_partition info;
+ 	const char *file = CONFIG_ENV_FAT_FILE;
+-	int dev, part;
+ 	int err;
+ 	loff_t size;
+ 	const char *ifname = env_fat_get_intf();
+@@ -76,6 +112,11 @@ static int env_fat_save(void)
+ 
+ 	part = blk_get_device_part_str(ifname, dev_and_part,
+ 				       &dev_desc, &info, 1);
++
++#ifdef CONFIG_ENV_FAT_AUTO_SOURCE
++	part = detect_source();
++#endif
++
+ 	if (part < 0)
+ 		return 1;
+ 
+@@ -85,7 +126,7 @@ static int env_fat_save(void)
+ 		 * This printf is embedded in the messages from env_save that
+ 		 * will calling it. The missing \n is intentional.
+ 		 */
+-		printf("Unable to use %s %d:%d...\n", ifname, dev, part);
++		printf("Unable to use %s-%d:%d...\n", ifname, dev, part);
+ 		return 1;
+ 	}
+ 
+@@ -100,7 +141,7 @@ static int env_fat_save(void)
+ 		 * This printf is embedded in the messages from env_save that
+ 		 * will calling it. The missing \n is intentional.
+ 		 */
+-		printf("Unable to write \"%s\" from %s%d:%d...\n", file, ifname, dev, part);
++		printf("Unable to write \"%s\" from %s-%d:%d...\n", file, ifname, dev, part);
+ 		return 1;
+ 	}
+ 
+@@ -119,9 +160,6 @@ static int env_fat_load(void)
+ 	ALLOC_CACHE_ALIGN_BUFFER(char, buf2, CONFIG_ENV_SIZE);
+ 	int err2;
+ #endif
+-	struct blk_desc *dev_desc = NULL;
+-	struct disk_partition info;
+-	int dev, part;
+ 	int err1;
+ 	const char *ifname = env_fat_get_intf();
+ 	const char *dev_and_part = env_fat_get_dev_part();
+@@ -142,6 +180,11 @@ static int env_fat_load(void)
+ #endif
+ 	part = blk_get_device_part_str(ifname, dev_and_part,
+ 				       &dev_desc, &info, 1);
++
++#ifdef CONFIG_ENV_FAT_AUTO_SOURCE
++	part = detect_source();
++#endif
++
+ 	if (part < 0)
+ 		goto err_env_relocate;
+ 
+@@ -151,7 +194,7 @@ static int env_fat_load(void)
+ 		 * This printf is embedded in the messages from env_save that
+ 		 * will calling it. The missing \n is intentional.
+ 		 */
+-		printf("Unable to use %s %d:%d...\n", ifname, dev, part);
++		printf("Unable to use %s-%d:%d...\n", ifname, dev, part);
+ 		goto err_env_relocate;
+ 	}
+ 
+@@ -168,7 +211,7 @@ static int env_fat_load(void)
+ 		 * This printf is embedded in the messages from env_save that
+ 		 * will calling it. The missing \n is intentional.
+ 		 */
+-		printf("Unable to read \"%s\" from %s%d:%d... \n",
++		printf("Unable to read \"%s\" from %s-%d:%d... \n",
+ 			CONFIG_ENV_FAT_FILE, ifname, dev, part);
+ 		goto err_env_relocate;
+ 	}
+-- 
+2.17.1
+
