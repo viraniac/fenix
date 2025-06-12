@@ -100,9 +100,6 @@ install_common()
 	# Now that all debs are installed, reenable initramfs-tools hook and generate initramfs
 	execute_in_chroot "chmod -v +x /etc/kernel/postinst.d/initramfs-tools"
 
-	kernel_version=$(ls $ROOTFS_TEMP/lib/modules)
-	execute_in_chroot "/usr/sbin/update-initramfs -u -k $kernel_version"
-
 	# Tweaks for platform
 	if [[ $(type -t tweaks_platform) == function ]]; then
 		tweaks_platform
@@ -604,6 +601,16 @@ prepare_partitions()
 		fi
 	fi
 
+	info_msg "Generating initrd.img..."
+
+	mount_chroot "$ROOTFS"
+	qemu_helper "$ROOTFS"
+
+	kernel_version=$(ls $ROOTFS/lib/modules)
+	eval 'LC_ALL=C LANG=C chroot $ROOTFS /bin/bash -c "/usr/sbin/update-initramfs -u -k $kernel_version"'
+
+	qemu_helper_deactivate "$ROOTFS"
+
 	[ "$DEBUG" ] && {
 	# DEBUG: print free space
 	info_msg "Free space:"
@@ -612,12 +619,12 @@ prepare_partitions()
 
 	sync
 
+	umount_chroot "$ROOTFS"
+
 	if [ "$INSTALL_TYPE" == "SD-USB" ]; then
-		umount $ROOTFS/boot
 		losetup -d "${IMAGE_LOOP_DEV}"
 		unset IMAGE_LOOP_DEV
 	fi
-	umount $ROOTFS
 }
 
 ## Prepare rootfs
